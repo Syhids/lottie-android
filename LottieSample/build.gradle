@@ -61,12 +61,8 @@ dependencies {
   implementation 'com.dlazaro66.qrcodereaderview:qrcodereaderview:2.0.2'
   implementation 'com.github.PhilJay:MPAndroidChart:v3.0.2'
 
-  debugImplementation 'com.github.brianPlummer:tinydancer:0.0.9'
-
   testImplementation 'junit:junit:4.12'
 
-  androidTestImplementation 'com.airbnb.android:happo:0.0.15@aar'
-  // TODO: figure out why transitive deps of happo are needed
   androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.1'
   androidTestImplementation "com.android.support.test:runner:1.0.1"
   androidTestImplementation 'com.android.support.test.espresso:espresso-idling-resource:3.0.1'
