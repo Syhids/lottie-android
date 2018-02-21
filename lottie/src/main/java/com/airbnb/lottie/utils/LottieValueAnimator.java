@@ -4,7 +4,6 @@ import android.animation.ValueAnimator;
 import android.support.annotation.FloatRange;
 import android.support.annotation.Nullable;
 import android.support.annotation.VisibleForTesting;
-import android.view.Choreographer;
 
 import com.airbnb.lottie.LottieComposition;
 
@@ -12,7 +11,7 @@ import com.airbnb.lottie.LottieComposition;
  * This is a slightly modified {@link ValueAnimator} that allows us to update start and end values
  * easily optimizing for the fact that we know that it's a value animator with 2 floats.
  */
-public class LottieValueAnimator extends BaseLottieAnimator implements Choreographer.FrameCallback {
+public class LottieValueAnimator extends BaseLottieAnimator {
 
 
   private float speed = 1f;
@@ -23,6 +22,50 @@ public class LottieValueAnimator extends BaseLottieAnimator implements Choreogra
   private float maxFrame = Integer.MAX_VALUE;
   @Nullable private LottieComposition composition;
   @VisibleForTesting protected boolean isRunning = false;
+
+ private  ChoreographerCompat.FrameCallbackCompat frameCallback = new ChoreographerCompat.FrameCallbackCompat() {
+    @Override public void doFrame(long frameTimeNanos) {
+      postFrameCallback();
+      if (composition == null || !isRunning()) {
+        return;
+      }
+
+      long now = System.nanoTime();
+      long timeSinceFrame = now - frameTime;
+      float frameDuration = getFrameDurationNs();
+      float frames = timeSinceFrame / frameDuration;
+      int wholeFrames = (int) frames;
+      if (wholeFrames == 0) {
+        return;
+      }
+      frame += isReversed() ? -wholeFrames : wholeFrames;
+      boolean ended = !MiscUtils.contains(frame, getMinFrame(), getMaxFrame());
+      frame = MiscUtils.clamp(frame, getMinFrame(), getMaxFrame());
+
+      float partialFramesDuration = (frames - wholeFrames) * frameDuration;
+      frameTime = (long) (now - partialFramesDuration);
+
+      notifyUpdate();
+      if (ended) {
+        if (getRepeatCount() != INFINITE && repeatCount >= getRepeatCount()) {
+          frame = getMaxFrame();
+          notifyEnd(isReversed());
+          removeFrameCallback();
+        } else {
+          notifyRepeat();
+          repeatCount++;
+          if (getRepeatMode() == REVERSE) {
+            reverseAnimationSpeed();
+          } else {
+            frame = getMinFrame();
+          }
+          frameTime = now;
+        }
+      }
+
+      verifyFrame();
+    }
+  };
 
   public LottieValueAnimator() {
   }
@@ -72,48 +115,6 @@ public class LottieValueAnimator extends BaseLottieAnimator implements Choreogra
 
   @Override public boolean isRunning() {
     return isRunning;
-  }
-
-  @Override public void doFrame(long frameTimeNanos) {
-    postFrameCallback();
-    if (composition == null || !isRunning()) {
-      return;
-    }
-
-    long now = System.nanoTime();
-    long timeSinceFrame = now - frameTime;
-    float frameDuration = getFrameDurationNs();
-    float frames = timeSinceFrame / frameDuration;
-    int wholeFrames = (int) frames;
-    if (wholeFrames == 0) {
-      return;
-    }
-    frame += isReversed() ? -wholeFrames : wholeFrames;
-    boolean ended = !MiscUtils.contains(frame, getMinFrame(), getMaxFrame());
-    frame = MiscUtils.clamp(frame, getMinFrame(), getMaxFrame());
-
-    float partialFramesDuration = (frames - wholeFrames) * frameDuration;
-    frameTime = (long) (now - partialFramesDuration);
-
-    notifyUpdate();
-    if (ended) {
-      if (getRepeatCount() != INFINITE && repeatCount >= getRepeatCount()) {
-        frame = getMaxFrame();
-        notifyEnd(isReversed());
-        removeFrameCallback();
-      } else {
-        notifyRepeat();
-        repeatCount++;
-        if (getRepeatMode() == REVERSE) {
-          reverseAnimationSpeed();
-        } else {
-          frame = getMinFrame();
-        }
-        frameTime = now;
-      }
-    }
-
-    verifyFrame();
   }
 
   private float getFrameDurationNs() {
@@ -223,12 +224,12 @@ public class LottieValueAnimator extends BaseLottieAnimator implements Choreogra
 
   protected void postFrameCallback() {
     removeFrameCallback();
-    Choreographer.getInstance().postFrameCallback(this);
+    ChoreographerCompat.getInstance().postFrameCallback(frameCallback);
     isRunning = true;
   }
 
   protected void removeFrameCallback() {
-    Choreographer.getInstance().removeFrameCallback(this);
+    ChoreographerCompat.getInstance().removeFrameCallback(frameCallback);
     isRunning = false;
   }
 
